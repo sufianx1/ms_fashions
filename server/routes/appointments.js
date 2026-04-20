@@ -1,5 +1,6 @@
 const express = require('express');
 const { body } = require('express-validator');
+const mongoose = require('mongoose');
 
 const Appointment = require('../models/Appointment');
 const auth = require('../middleware/auth');
@@ -41,20 +42,27 @@ router.get('/', auth, async (req, res, next) => {
   }
 });
 
-router.patch('/:id/status', auth, async (req, res, next) => {
+router.patch('/:id/status', auth, [body('status').isIn(['pending', 'confirmed', 'completed', 'cancelled'])], validate, async (req, res, next) => {
   try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid appointment id' });
+    }
+    const appointmentId = new mongoose.Types.ObjectId(req.params.id);
     const updates = { status: req.body.status };
     if (req.body.status === 'confirmed') {
       updates.whatsappConfirmed = true;
       updates.confirmedAt = new Date();
     }
 
-    const appointment = await Appointment.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
-      runValidators: true
-    });
-
+    const appointment = await Appointment.findById(appointmentId);
     if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
+    appointment.status = updates.status;
+    if (updates.whatsappConfirmed !== undefined) appointment.whatsappConfirmed = updates.whatsappConfirmed;
+    if (updates.confirmedAt !== undefined) appointment.confirmedAt = updates.confirmedAt;
+    await appointment.save();
     return res.json(appointment);
   } catch (error) {
     return next(error);

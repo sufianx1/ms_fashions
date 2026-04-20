@@ -16,11 +16,22 @@ const orderRoutes = require('./routes/orders');
 const testimonialRoutes = require('./routes/testimonials');
 
 const app = express();
+const defaultOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:3001', 'http://127.0.0.1:3001'];
+const allowedOrigins = (process.env.CLIENT_URLS || process.env.CLIENT_URL || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+const originAllowlist = new Set(allowedOrigins.length > 0 ? allowedOrigins : defaultOrigins);
 
 app.use(helmet());
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || '*',
+    origin(origin, callback) {
+      if (!origin || originAllowlist.has(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('CORS origin not allowed'));
+    },
     credentials: true
   })
 );

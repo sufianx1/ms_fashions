@@ -1,6 +1,7 @@
 const express = require('express');
 const Stripe = require('stripe');
 const { body } = require('express-validator');
+const mongoose = require('mongoose');
 
 const Order = require('../models/Order');
 const Product = require('../models/Product');
@@ -16,6 +17,8 @@ router.post(
   auth,
   [
     body('items').isArray({ min: 1 }),
+    body('items.*.productId').isMongoId(),
+    body('items.*.quantity').isInt({ min: 1 }),
     body('paymentMethod').isIn(['stripe', 'jazzcash']),
     body('shippingAddress.address').trim().notEmpty(),
     body('shippingAddress.city').trim().notEmpty(),
@@ -25,7 +28,10 @@ router.post(
   async (req, res, next) => {
     try {
       const { items, paymentMethod, shippingAddress } = req.body;
-      const productIds = items.map((item) => item.productId);
+      const productIds = items.map((item) => item.productId).filter((id) => mongoose.isValidObjectId(id));
+      if (productIds.length !== items.length) {
+        return res.status(400).json({ message: 'Invalid product id in cart' });
+      }
       const products = await Product.find({ _id: { $in: productIds } });
 
       const normalizedItems = items.map((item) => {
@@ -73,14 +79,28 @@ router.get('/', auth, async (req, res, next) => {
   }
 });
 
-router.patch('/:id/status', auth, async (req, res, next) => {
+router.patch(
+  '/:id/status',
+  auth,
+  [
+    body('orderStatus').optional().isIn(['pending', 'processing', 'completed', 'cancelled']),
+    body('paymentStatus').optional().isIn(['pending', 'completed', 'failed', 'refunded'])
+  ],
+  validate,
+  async (req, res, next) => {
   try {
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { orderStatus: req.body.orderStatus, paymentStatus: req.body.paymentStatus },
-      { new: true, runValidators: true }
-    );
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid order id' });
+    }
+    const orderId = new mongoose.Types.ObjectId(req.params.id);
+    const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: 'Order not found' });
+    if (req.body.orderStatus) order.orderStatus = req.body.orderStatus;
+    if (req.body.paymentStatus) order.paymentStatus = req.body.paymentStatus;
+    await order.save();
     return res.json(order);
   } catch (error) {
     return next(error);
@@ -89,8 +109,15 @@ router.patch('/:id/status', auth, async (req, res, next) => {
 
 router.post('/:id/refund', auth, async (req, res, next) => {
   try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required' });
+    }
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid order id' });
+    }
+    const orderId = new mongoose.Types.ObjectId(req.params.id);
     const order = await Order.findByIdAndUpdate(
-      req.params.id,
+      orderId,
       { paymentStatus: 'refunded', orderStatus: 'cancelled' },
       { new: true }
     );
@@ -122,9 +149,7 @@ router.post('/payments/stripe/create-intent', auth, async (req, res, next) => {
 
 router.post('/payments/jazzcash/initiate', auth, async (req, res) => {
   return res.json({
-    message: 'JazzCash initiation payload generated',
-    merchantId: process.env.JAZZCASH_MERCHANT_ID || null,
-    returnUrl: process.env.JAZZCASH_RETURN_URL || null,
+    message: 'JazzCash initiation endpoint is available. Complete gateway integration on secure server-side callback flow.',
     status: 'pending'
   });
 });

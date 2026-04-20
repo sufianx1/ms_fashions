@@ -5,6 +5,7 @@ const connectDatabase = async () => {
   if (!uri) {
     throw new Error('MONGODB_URI is required');
   }
+  mongoose.set('sanitizeFilter', true);
 
   await mongoose.connect(uri, {
     autoIndex: process.env.NODE_ENV !== 'production'
