@@ -1,21 +1,39 @@
 const mongoose = require('mongoose');
 
-const productSchema = new mongoose.Schema({
-    name: { type: String, required: true },
+const COLLECTIONS = [
+  'Kashmiri Shawls',
+  'Chicken Kari',
+  'Kamdani',
+  'Lehenga',
+  'Mukesh',
+  'Chunri',
+  'Baadla',
+  'Antique',
+  'Srinagar',
+  'Cross-Stitch'
+];
+
+const OCCASIONS = ['Wedding', 'Mehndi', 'Eid', 'Formal', 'Casual'];
+
+const productSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    slug: { type: String, unique: true, required: true, lowercase: true, trim: true },
     description: {
-        en: { type: String, required: true },
-        ur: { type: String, required: true }
+      en: { type: String, required: true, trim: true },
+      ur: { type: String, required: true, trim: true }
     },
-    collection: { type: String, enum: ['Kashmiri Shawls', 'Chicken Kari', 'Kamdani', 'Lehenga', 'Mukesh', 'Chunri', 'Baadla', 'Antique', 'Srinagar', 'Cross-Stitch'], required: true },
-    occasion: [{ type: String, enum: ['Wedding', 'Mehndi', 'Eid', 'Formal', 'Casual'] }],
-    price: { type: Number, required: true },
-    priceRange: { min: Number, max: Number },
-    images: [{ type: String }],
-    videos: [{ type: String }],
-    stock: { type: Number, default: 0 },
+    collection: { type: String, enum: COLLECTIONS, required: true },
+    occasions: [{ type: String, enum: OCCASIONS }],
+    price: { type: Number, required: true, min: 0 },
+    images: [{ type: String, trim: true }],
+    videos: [{ type: String, trim: true }],
     featured: { type: Boolean, default: false },
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
-});
+    stock: { type: Number, default: 0, min: 0 }
+  },
+  { timestamps: true }
+);
 
 module.exports = mongoose.model('Product', productSchema);
+module.exports.COLLECTIONS = COLLECTIONS;
+module.exports.OCCASIONS = OCCASIONS;
